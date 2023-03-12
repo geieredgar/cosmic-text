@@ -31,7 +31,7 @@ impl<'a> ViEditor<'a> {
     pub fn load_text<P: AsRef<std::path::Path>>(
         &mut self,
         path: P,
-        attrs: crate::Attrs<'a>,
+        attrs: impl AsRef<crate::Attrs> + Into<crate::Attrs>,
     ) -> std::io::Result<()> {
         self.editor.load_text(path, attrs)
     }

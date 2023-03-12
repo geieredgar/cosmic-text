@@ -565,16 +565,28 @@ impl<'a> Buffer<'a> {
     }
 
     /// Set text of buffer, using provided attributes for each line by default
-    pub fn set_text(&mut self, text: &str, attrs: Attrs<'a>) {
+    pub fn set_text(&mut self, text: &str, attrs: impl AsRef<Attrs> + Into<Attrs>) {
         self.lines.clear();
-        for line in text.lines() {
+        let mut lines = text.lines().peekable();
+        if lines.peek().is_some() {
+            while let Some(line) = lines.next() {
+                if lines.peek().is_some() {
+                    self.lines.push(BufferLine::new(
+                        line.to_string(),
+                        AttrsList::new(attrs.as_ref().clone()),
+                    ));
+                } else {
+                    self.lines.push(BufferLine::new(
+                        line.to_string(),
+                        AttrsList::new(attrs.into()),
+                    ));
+                    break;
+                }
+            }
+        } else {
+            // Make sure there is always one line
             self.lines
-                .push(BufferLine::new(line.to_string(), AttrsList::new(attrs)));
-        }
-        // Make sure there is always one line
-        if self.lines.is_empty() {
-            self.lines
-                .push(BufferLine::new(String::new(), AttrsList::new(attrs)));
+                .push(BufferLine::new(String::new(), AttrsList::new(attrs.into())));
         }
 
         self.scroll = 0;

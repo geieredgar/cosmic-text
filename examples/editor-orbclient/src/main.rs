@@ -71,7 +71,10 @@ fn main() {
         .buffer_mut()
         .set_size(window.width() as f32 - line_x * 2.0, window.height() as f32);
 
-    let attrs = Attrs::new().monospaced(true).family(Family::Monospace);
+    let attrs = Attrs::builder()
+        .monospaced(true)
+        .family(Family::Monospace)
+        .build();
     match editor.load_text(&path, attrs) {
         Ok(()) => (),
         Err(err) => {

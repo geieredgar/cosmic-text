@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{Attrs, AttrsOwned, Font, FontMatches};
+use crate::{Attrs, Font, FontMatches};
 
 #[ouroboros::self_referencing]
 struct FontSystemInner {
@@ -16,7 +16,7 @@ struct FontSystemInner {
     font_cache: Mutex<HashMap<fontdb::ID, Option<Arc<Font<'this>>>>>,
     #[borrows(locale, db)]
     #[not_covariant]
-    font_matches_cache: Mutex<HashMap<AttrsOwned, Arc<FontMatches<'this>>>>,
+    font_matches_cache: Mutex<HashMap<Attrs, Arc<FontMatches<'this>>>>,
 }
 
 /// Access system fonts
@@ -122,45 +122,47 @@ impl FontSystem {
         self.0.with(|fields| get_font(&fields, id))
     }
 
-    pub fn get_font_matches<'a>(&'a self, attrs: Attrs) -> Arc<FontMatches<'a>> {
+    pub fn get_font_matches(&self, attrs: impl AsRef<Attrs> + Into<Attrs>) -> Arc<FontMatches> {
         self.0.with(|fields| {
             let mut font_matches_cache = fields
                 .font_matches_cache
                 .lock()
                 .expect("failed to lock font matches cache");
-            //TODO: do not create AttrsOwned unless entry does not already exist
-            font_matches_cache
-                .entry(AttrsOwned::new(attrs))
-                .or_insert_with(|| {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let now = std::time::Instant::now();
+            if let Some(matches) = font_matches_cache.get(attrs.as_ref()) {
+                matches.clone()
+            } else {
+                #[cfg(not(target_arch = "wasm32"))]
+                let now = std::time::Instant::now();
 
-                    let mut fonts = Vec::new();
-                    for face in fields.db.faces() {
-                        if !attrs.matches(face) {
-                            continue;
-                        }
-
-                        if let Some(font) = get_font(&fields, face.id) {
-                            fonts.push(font);
-                        }
+                let mut fonts = Vec::new();
+                for face in fields.db.faces() {
+                    if !attrs.as_ref().matches(face) {
+                        continue;
                     }
 
-                    let font_matches = Arc::new(FontMatches {
-                        locale: fields.locale,
-                        default_family: fields.db.family_name(&attrs.family).to_string(),
-                        fonts,
-                    });
-
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        let elapsed = now.elapsed();
-                        log::debug!("font matches for {:?} in {:?}", attrs, elapsed);
+                    if let Some(font) = get_font(&fields, face.id) {
+                        fonts.push(font);
                     }
+                }
 
-                    font_matches
-                })
-                .clone()
+                let font_matches = Arc::new(FontMatches {
+                    locale: fields.locale,
+                    default_family: fields
+                        .db
+                        .family_name(&attrs.as_ref().family_owned.as_family())
+                        .to_string(),
+                    fonts,
+                });
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let elapsed = now.elapsed();
+                    log::debug!("font matches for {:?} in {:?}", attrs.as_ref(), elapsed);
+                }
+
+                font_matches_cache.insert(attrs.into(), font_matches.clone());
+                font_matches
+            }
         })
     }
 }

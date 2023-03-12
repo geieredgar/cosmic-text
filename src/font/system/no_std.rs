@@ -56,10 +56,10 @@ impl FontSystem {
         }
     }
 
-    pub fn get_font_matches<'a>(&'a self, attrs: Attrs) -> Arc<FontMatches<'a>> {
+    pub fn get_font_matches(&self, attrs: impl AsRef<Attrs> + Into<Attrs>) -> Arc<FontMatches> {
         let mut fonts = Vec::new();
         for face in self.db.faces() {
-            if !attrs.matches(face) {
+            if !attrs.as_ref().matches(face) {
                 continue;
             }
 
@@ -70,7 +70,10 @@ impl FontSystem {
 
         Arc::new(FontMatches {
             locale: &self.locale,
-            default_family: self.db.family_name(&attrs.family).to_string(),
+            default_family: self
+                .db
+                .family_name(&attrs.as_ref().family_owned.as_family())
+                .to_string(),
             fonts,
         })
     }

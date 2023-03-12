@@ -302,7 +302,7 @@ impl ShapeWord {
         for (egc_i, _egc) in word.grapheme_indices(true) {
             let start_egc = word_range.start + egc_i;
             let attrs_egc = attrs_list.get_span(start_egc);
-            if !attrs.compatible(&attrs_egc) {
+            if !attrs.compatible(attrs_egc) {
                 //TODO: more efficient
                 glyphs.append(&mut shape_run(
                     font_system,

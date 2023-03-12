@@ -7,7 +7,9 @@ use syntect::highlighting::{
 };
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
-use crate::{Action, AttrsList, Buffer, Color, Cursor, Edit, Editor, Style, Weight, Wrap};
+use crate::{
+    Action, AttrsBuilder, AttrsList, Buffer, Color, Cursor, Edit, Editor, Style, Weight, Wrap,
+};
 
 pub struct SyntaxSystem {
     pub syntax_set: SyntaxSet,
@@ -67,10 +69,10 @@ impl<'a> SyntaxEditor<'a> {
     ///
     /// Returns an [`io::Error`] if reading the file fails
     #[cfg(feature = "std")]
-    pub fn load_text<P: AsRef<Path>>(
+    pub fn load_text(
         &mut self,
-        path: P,
-        attrs: crate::Attrs<'a>,
+        path: impl AsRef<Path>,
+        attrs: impl AsRef<crate::Attrs> + Into<crate::Attrs>,
     ) -> io::Result<()> {
         let path = path.as_ref();
 
@@ -171,11 +173,11 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
             );
 
             let attrs = line.attrs_list().defaults();
-            let mut attrs_list = AttrsList::new(attrs);
+            let mut attrs_list = AttrsList::new(attrs.clone());
             for (style, _, range) in ranges {
                 attrs_list.add_span(
                     range,
-                    attrs
+                    AttrsBuilder::new(attrs.clone())
                         .color(Color::rgba(
                             style.foreground.r,
                             style.foreground.g,
@@ -192,7 +194,8 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
                             Weight::BOLD
                         } else {
                             Weight::NORMAL
-                        }), //TODO: underline
+                        })
+                        .build(), //TODO: underline
                 );
             }
 

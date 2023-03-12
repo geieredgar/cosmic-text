@@ -8,9 +8,9 @@ use core::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-#[cfg(feature = "swash")]
-use crate::Color;
-use crate::{Action, Affinity, AttrsList, Buffer, BufferLine, Cursor, Edit, LayoutCursor};
+use crate::{
+    Action, Affinity, AttrsList, Buffer, BufferLine, Color, Cursor, Edit, LayoutCursor, Spans,
+};
 
 /// A wrapper of [`Buffer`] for easy editing
 pub struct Editor<'a> {
@@ -212,7 +212,12 @@ impl<'a> Edit<'a> for Editor<'a> {
         true
     }
 
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>) {
+    fn insert_string(
+        &mut self,
+        data: &str,
+        attrs_list: Option<AttrsList>,
+        color_spans: Option<Spans<Color>>,
+    ) {
         self.delete_selection();
         let mut remaining_split_len = data.len();
         if remaining_split_len == 0 {
@@ -231,19 +236,31 @@ impl<'a> Edit<'a> for Editor<'a> {
             AttrsList::new(line.attrs_list().get_span(line.text().len()).clone())
         });
 
+        // Collect color spans
+        let mut final_color_spans = color_spans.unwrap_or_else(|| {
+            let mut spans = Spans::default();
+            if let Some(color) = line.color_spans().get(line.text().len()) {
+                spans.add(0..data.len(), *color);
+            }
+            spans
+        });
+
         // Append the inserted text, line by line
         // we want to see a blank entry if the string ends with a newline
         let addendum = once("").filter(|_| data.ends_with('\n'));
         let mut lines_iter = data.split_inclusive('\n').chain(addendum);
         if let Some(data_line) = lines_iter.next() {
             let mut these_attrs = final_attrs.split_off(data_line.len());
+            let mut these_color_spans = final_color_spans.split_off(data_line.len());
             remaining_split_len -= data_line.len();
             core::mem::swap(&mut these_attrs, &mut final_attrs);
+            core::mem::swap(&mut these_color_spans, &mut final_color_spans);
             line.append(BufferLine::new(
                 data_line
                     .strip_suffix(char::is_control)
                     .unwrap_or(data_line),
                 these_attrs,
+                these_color_spans,
             ));
         } else {
             panic!("str::lines() did not yield any elements");
@@ -255,6 +272,7 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .strip_suffix(char::is_control)
                     .unwrap_or(data_line),
                 final_attrs.split_off(remaining_split_len),
+                final_color_spans.split_off(remaining_split_len),
             );
             tmp.append(after);
             self.buffer.lines.insert(insert_line, tmp);
@@ -269,6 +287,7 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .strip_suffix(char::is_control)
                     .unwrap_or(data_line),
                 final_attrs.split_off(remaining_split_len),
+                final_color_spans.split_off(remaining_split_len),
             );
             self.buffer.lines.insert(insert_line, tmp);
             self.cursor.line += 1;
@@ -464,7 +483,7 @@ impl<'a> Edit<'a> for Editor<'a> {
                 } else {
                     let mut str_buf = [0u8; 8];
                     let str_ref = character.encode_utf8(&mut str_buf);
-                    self.insert_string(str_ref, None);
+                    self.insert_string(str_ref, None, None);
                 }
             }
             Action::Enter => {
@@ -829,8 +848,9 @@ impl<'a> Edit<'a> for Editor<'a> {
             for glyph in run.glyphs.iter() {
                 let (cache_key, x_int, y_int) = (glyph.cache_key, glyph.x_int, glyph.y_int);
 
-                let glyph_color = match glyph.color_opt {
-                    Some(some) => some,
+                let glyph_color = match self.buffer.lines[run.line_i].color_spans().get(glyph.start)
+                {
+                    Some(some) => *some,
                     None => color,
                 };
 

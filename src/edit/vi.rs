@@ -2,7 +2,7 @@ use alloc::string::String;
 use core::cmp;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{Action, AttrsList, Buffer, Color, Cursor, Edit, SyntaxEditor};
+use crate::{Action, AttrsList, Buffer, Color, Cursor, Edit, Spans, SyntaxEditor};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
@@ -32,8 +32,9 @@ impl<'a> ViEditor<'a> {
         &mut self,
         path: P,
         attrs: impl AsRef<crate::Attrs> + Into<crate::Attrs>,
+        color: Option<Color>,
     ) -> std::io::Result<()> {
-        self.editor.load_text(path, attrs)
+        self.editor.load_text(path, attrs, color)
     }
 
     /// Get the default background color
@@ -80,8 +81,13 @@ impl<'a> Edit<'a> for ViEditor<'a> {
         self.editor.delete_selection()
     }
 
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>) {
-        self.editor.insert_string(data, attrs_list);
+    fn insert_string(
+        &mut self,
+        data: &str,
+        attrs_list: Option<AttrsList>,
+        color_spans: Option<Spans<Color>>,
+    ) {
+        self.editor.insert_string(data, attrs_list, color_spans);
     }
 
     fn action(&mut self, action: Action) {
@@ -416,8 +422,11 @@ impl<'a> Edit<'a> for ViEditor<'a> {
             for glyph in run.glyphs.iter() {
                 let (cache_key, x_int, y_int) = (glyph.cache_key, glyph.x_int, glyph.y_int);
 
-                let glyph_color = match glyph.color_opt {
-                    Some(some) => some,
+                let glyph_color = match self.editor.buffer().lines[run.line_i]
+                    .color_spans()
+                    .get(glyph.start)
+                {
+                    Some(some) => *some,
                     None => color,
                 };
 

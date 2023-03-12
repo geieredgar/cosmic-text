@@ -8,7 +8,8 @@ use syntect::highlighting::{
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
 use crate::{
-    Action, AttrsBuilder, AttrsList, Buffer, Color, Cursor, Edit, Editor, Style, Weight, Wrap,
+    Action, AttrsBuilder, AttrsList, Buffer, Color, Cursor, Edit, Editor, Spans, Style, Weight,
+    Wrap,
 };
 
 pub struct SyntaxSystem {
@@ -73,11 +74,12 @@ impl<'a> SyntaxEditor<'a> {
         &mut self,
         path: impl AsRef<Path>,
         attrs: impl AsRef<crate::Attrs> + Into<crate::Attrs>,
+        color: Option<Color>,
     ) -> io::Result<()> {
         let path = path.as_ref();
 
         let text = fs::read_to_string(path)?;
-        self.editor.buffer_mut().set_text(&text, attrs);
+        self.editor.buffer_mut().set_text(&text, attrs, color);
 
         //TODO: re-use text
         self.syntax = match self.syntax_system.syntax_set.find_syntax_for_file(path) {
@@ -174,16 +176,11 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
 
             let attrs = line.attrs_list().defaults();
             let mut attrs_list = AttrsList::new(attrs.clone());
+            let mut color_spans = Spans::<Color>::default();
             for (style, _, range) in ranges {
                 attrs_list.add_span(
-                    range,
+                    range.clone(),
                     AttrsBuilder::new(attrs.clone())
-                        .color(Color::rgba(
-                            style.foreground.r,
-                            style.foreground.g,
-                            style.foreground.b,
-                            style.foreground.a,
-                        ))
                         //TODO: background
                         .style(if style.font_style.contains(FontStyle::ITALIC) {
                             Style::Italic
@@ -196,6 +193,15 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
                             Weight::NORMAL
                         })
                         .build(), //TODO: underline
+                );
+                color_spans.add(
+                    range,
+                    Color::rgba(
+                        style.foreground.r,
+                        style.foreground.g,
+                        style.foreground.b,
+                        style.foreground.a,
+                    ),
                 );
             }
 
@@ -240,8 +246,13 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
         self.editor.delete_selection()
     }
 
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>) {
-        self.editor.insert_string(data, attrs_list);
+    fn insert_string(
+        &mut self,
+        data: &str,
+        attrs_list: Option<AttrsList>,
+        color_spans: Option<Spans<Color>>,
+    ) {
+        self.editor.insert_string(data, attrs_list, color_spans);
     }
 
     fn action(&mut self, action: Action) {

@@ -1,9 +1,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-#[cfg(feature = "swash")]
-use crate::Color;
-use crate::{AttrsList, Buffer, Cursor};
+use crate::{AttrsList, Buffer, Color, Cursor, Spans};
 
 pub use self::editor::*;
 mod editor;
@@ -106,7 +104,12 @@ pub trait Edit<'a> {
 
     /// Insert a string at the current cursor or replacing the current selection with the given
     /// attributes, or with the previous character's attributes if None is given.
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>);
+    fn insert_string(
+        &mut self,
+        data: &str,
+        attrs_list: Option<AttrsList>,
+        color_spans: Option<Spans<Color>>,
+    );
 
     /// Perform an [Action] on the editor
     fn action(&mut self, action: Action);
